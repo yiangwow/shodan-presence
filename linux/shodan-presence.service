@@ -1,0 +1,13 @@
+[Unit]
+Description=SHODAN Discord Rich Presence ("Watching ME?")
+After=network-online.target
+
+[Service]
+# Retries every 30 s until Discord's IPC socket is up, so start order does not matter.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin
+ExecStart=%h/.local/share/shodan-presence/venv/bin/python %h/.local/share/shodan-presence/presence.pyw
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=default.target
