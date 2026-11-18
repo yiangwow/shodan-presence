@@ -5,9 +5,39 @@ is named `ME?`, rendering as **"Watching ME?"** — every quote answers that que
 
 ## Architecture
 
-One file: `presence.pyw`. Connects to the Discord desktop client's local RPC
-pipe via `pypresence` and rotates the profile card every 15s (Discord's RPC
-rate floor — faster updates are silently dropped).
+Connects to the Discord desktop client's local RPC pipe via `pypresence` and
+rotates the profile card every 15s (Discord's RPC rate floor — faster updates
+are silently dropped).
+
+`presence.pyw` is only the start file (the unit, the Windows shortcut and both
+deploy scripts start it). The code is the `shodan_presence/` package, split
+2026-11-18 from the old single file with no behaviour change:
+
+| Module | Holds |
+|---|---|
+| `config.py` | Discord ids, art, buttons, timings, `WIN`, `DATA_DIR` and every runtime file path |
+| `store.py` | `_state` (state.json) load/save, `log()` |
+| `lines/quotes.py` | quote pools by mood, hour, day and mode (data only) |
+| `lines/weird.py` | zalgo/drip helpers, `WEIRD`, `distort()` |
+| `lines/arcs.py` | `ARCS` (data only) |
+| `lines/games.py` | `REACTIVE`, `GAME_DIRS`, `HELPER_RE` (data only) |
+| `decks.py` | `_decks`, `draw()` |
+| `growth.py` | `_grown` (grown.json), prompts, `_valid()`, `grow()`, `maybe_grow()` |
+| `wall.py` | `_wall`, `watch_wall()` and the overlay |
+| `processes.py` | process scan, play time, `uncatalogued.txt` |
+| `cards.py` | `pick_card()`, `sanitize()`, `mood()`, `self_lines()`, arc/guard state |
+| `app.py` | `session()` and `main()` |
+
+Rules that keep the split safe:
+- Shared state (`_state`, `_grown`, `_decks`, `_wall`, `_arc`, ...) is imported by name
+  across modules, so it must only ever be changed IN PLACE (`_grown[:] = ...`,
+  `.update()`, `.clear()`). Rebinding one (`_grown = [...]`) silently forks it.
+- Imports go one way: `config` → `store`/`lines` → `decks` → `growth`/`wall`/`processes`
+  → `cards` → `app`. `decks` exists only to break the `growth` ↔ `cards` loop.
+- Runtime files live in `DATA_DIR`, next to the package, never inside it: the deploy
+  scripts delete and recopy `shodan_presence/`.
+- Tests: `python -m unittest discover -s tests` (9 small checks; they point HOME at a
+  temp folder first, so the live data is not touched).
 
 Card modes, picked per rotation by weighted roll:
 - **Game narration** (every 6th rotation while a game runs): `REACTIVE` maps exact lowercase
@@ -51,8 +81,9 @@ recorded before running, so a failure waits a day. Outcome is logged:
 
 ## Runtime (Arch Linux) — since 2026-11-08
 
-- Same `presence.pyw`; `WIN = os.name == "nt"` picks paths and process scan.
-- Deploy: `./deploy-linux.sh` → copies to `~/.local/share/shodan-presence/`
+- Same code; `WIN = os.name == "nt"` picks paths and process scan.
+- Deploy: `./deploy-linux.sh` → syntax-checks every file, copies `presence.pyw` and
+  `shodan_presence/` to `~/.local/share/shodan-presence/`
   (also holds `grown.json`, `state.json`, `uncatalogued.txt`, `presence.log`,
   and `venv/` with pypresence 4.6.2), installs + restarts the user unit.
 - Autostart: systemd user unit `shodan-presence.service`
@@ -79,11 +110,15 @@ recorded before running, so a failure waits a day. Outcome is logged:
 
 ## Deploy
 
-Edit `presence.pyw` here, then:
+Edit the package here, run the tests, then:
 
 ```bash
-./deploy.sh   # syntax-check → copy to AppData → kill pythonw → relaunch hidden
+./deploy-linux.sh   # Arch: syntax-check → copy → restart the user unit
+./deploy.sh         # Windows: syntax-check → copy to AppData → kill pythonw → relaunch hidden
 ```
+
+Both copy `presence.pyw` plus the whole `shodan_presence/` folder. `deploy.sh` was
+updated for the package on 2026-11-18 but not run since (Windows was not booted).
 
 ## Tone rule (binding)
 

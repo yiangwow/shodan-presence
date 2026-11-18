@@ -1,0 +1,2 @@
+pypresence==4.6.2
+# Optional, only for the wall overlay (shodan_presence/wall.py): Pillow
